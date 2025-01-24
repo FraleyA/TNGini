@@ -28,7 +28,7 @@ if __name__ == "__main__":
         elif rotate in ('false', '0', 'no', 'n'):
             change_viewing_angle = False
         else:
-            print(f'Invalid boolean value for change_viewing_angle: {sys.argv[4]}')
+            print(f'Invalid boolean value for change_viewing_angle: {sys.argv[5]}')
             sys.exit()
             
         save_path = str(sys.argv[6])
