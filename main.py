@@ -2,8 +2,6 @@ import numpy as np
 from TNGini import gini_over_time
 import sys
 
-# This is a test.
-
 # Subbox directories: Alter these as needed.
 subbox0 = '/orange/lblecha/IllustrisTNG/Runs/TNG100-1/postprocessing/SubboxSubhaloList/subbox0_99.hdf5' # 7.5 cMpc/h
 subbox1 = '/orange/lblecha/IllustrisTNG/Runs/TNG100-1/postprocessing/SubboxSubhaloList/subbox1_99.hdf5' # 7.5 cMpc/h
