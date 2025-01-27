@@ -21,7 +21,7 @@ def get_subhalo_position(subbox_dir, subhalo_id, snap_num):
 
     
 def mass_density_in_pixels(path, snap_num, p_type, center, subbox_num=None, view='xy', box_height=5, box_length=20, box_width=20, Nbins=80, change_viewing_angle=False, theta=None, phi=None, align=False):
-    """ Returns the mass density of each galaxy pixel sorted in increasing order.
+    """ Returns an effective image where pixel values represent stellar mass densities (unsorted, unprocessed).
         
         subbox_num: 0, 1 or 2, left as optional so that the script may work with unmodified Illustris package in full box snapshots.
         Nbins: Kept at a low number to reproduce images closer to the resolution of actual observations.
@@ -167,17 +167,57 @@ def mass_density_in_pixels(path, snap_num, p_type, center, subbox_num=None, view
     
     # Binning method.
     mass_density = np.zeros((lx1, lx2))
-    proj_freq = np.zeros((lx1, lx2))
          
     for idx in np.arange(Num):
         mass_density[int((axis1[idx] - 0.5*(-box_length))/h),int((axis2[idx] - 0.5*(-box_width))/h)] += prop[idx]
-        proj_freq[int((axis1[idx] - 0.5*(-box_length))/h),int((axis2[idx] - 0.5*(-box_width))/h)] += 1
-    
-    galaxy_pixels = mass_density > 0 # Only include pixels that contain particles
-    mass_density = np.sort(mass_density[galaxy_pixels])
-    mass_density = mass_density.flatten()
                 
     return mass_density
+
+
+def gini_plot(mass_density, style='seaborn-v0_8-muted', color1=2, color2=0, save_name=None, dpi=300):
+    """ Just a plot of the Gini area between the galaxy distribution curve and L(p) = p.
+        color1 and color2: Color based on the chosen matplotlib style parameter, and rcParams index.
+    """
+
+    # Apply mask to mass_density.
+    galaxy_pixels = mass_density > 0
+    mass_density = np.sort(mass_density[galaxy_pixels])
+    mass_density.flatten()
+
+    # Percentage of faintest pixels.
+    pixels = np.arange(1, len(mass_density) + 1)
+    percent_pixels = []
+    for i in pixels:
+        percent_pixels.append(i / len(pixels))
+
+    percent_pixels = np.array(percent_pixels)
+
+    # Percentage of total flux.
+    percent_mass_density = []
+    for i in range(1, len(mass_density) + 1):
+        percent_mass_density.append(np.sum(mass_density[0:i]) / np.sum(mass_density))
+
+    percent_mass_density = np.array(percent_mass_density)
+
+    # Plot the processed mass_density data.
+    plt.style.use(style)
+    colors = plt.rcParams['axes.prop_cycle'].by_key()['color']
+    color1 = colors[color1]
+    color2= colors[color2]
+    
+    fig, ax = plt.subplots(dpi=dpi)
+    ax.plot(pixels/len(pixels), pixels/len(pixels), color=color2, label=r'$L(p) = p$')
+    ax.plot(percent_pixels, percent_mass_density, color=color1, label=r'$L(p)$')
+    plt.fill_between(percent_pixels, pixels/len(pixels), percent_mass_density, color='grey', alpha=0.4)
+    plt.text(0.55, 0.35, r'$G_{\rho}$', fontsize='xx-large')
+    ax.grid(True)
+    ax.legend()
+    ax.set_xlabel(r'$p = \%\:pixels$')
+    ax.set_ylabel(r'$L(p)$')
+    ax.set_title('Gini Coefficient Mass Density')
+
+    if save_name != None:
+        fig.savefig(save_name)
 
 
 def gini_over_time(path, subbox_dir, subhalo_id, snap_range, p_type, save_path, subbox_num=None, view='xy', 
@@ -202,10 +242,17 @@ def gini_over_time(path, subbox_dir, subhalo_id, snap_range, p_type, save_path, 
                                                   box_height=10, box_length=box_length, box_width=box_width, Nbins=Nbins, 
                                                   change_viewing_angle=change_viewing_angle, theta=theta, phi=phi
                                                  )
+            galaxy_pixels = mass_density > 0 # Only include pixels that contain stellar particles
+            mass_density = np.sort(mass_density[galaxy_pixels]) # Sort pixels for gini calculation
+            mass_density.flatten()
+            
         else:
             mass_density = mass_density_in_pixels(path, snapshot, p_type, subhalo_center, subbox_num=subbox_num, view='xy', 
                                                   box_height=10, box_length=box_length, box_width=box_width, Nbins=Nbins, 
                                                  )
+            galaxy_pixels = mass_density > 0 # Only include pixels that contain stellar particles
+            mass_density = np.sort(mass_density[galaxy_pixels]) # Sort pixels for gini calculation
+            mass_density.flatten()
             
         pixels = np.arange(1, len(mass_density) + 1)
         n = len(pixels)
