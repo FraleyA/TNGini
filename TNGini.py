@@ -344,3 +344,78 @@ def gini_over_time(path, subbox_dir, subhalo_id, snap_range, p_type, save_path, 
                         )
         
     return lookback_time, gini_coefficients
+
+
+def M_total_minimum(mass_density, maximum_iterations=1000, tolerance=1e-6):
+    """ Takes the unprocessed merger snapshot, and uses gradient descent to pinpoint the minimum
+        value of M_total.
+        
+        mass_density: NxN pixel image of a galaxy merger.
+        maximum_iterations: Iteration limit before the algori"""
+    
+    # Camera dimensions, i.e. the pixel coordinates (x, y)
+    x_len = len(mass_density[0])
+    y_len = len(mass_density[1])
+
+    # Initial guess at the middle pixel because that is the subhalo center
+    x_center = x_len / 2
+    y_center = y_len / 2
+    
+    # Iteration counter
+    iteration = 0
+
+    # Index coordiantes of each pixel on the "camera"
+    x_coords = np.arange(0, x_len)[:, None]
+    y_coords = np.arange(0, y_len)[None, :]
+
+    # Initial M_total
+    M_total = np.sum(mass_density * ((x_coords - x_center)**2 + (y_coords - y_center)**2))
+
+    # Need to implement feature that prevents oscillating between two positions around the minimum.
+    visited_points = {} # {position; # of times visited}
+    M_total_list = [M_total]
+
+    while iteration < maximum_iterations:
+
+        current_center = (x_center, y_center)
+
+        # Count the number of visits; 0 initializes the value if it's the first entry
+        visited_points[current_center] = visited_points.get(current_center, 0) + 1
+
+        # M_total_new resets to 0 at the beginning of each iteration
+        M_total_new = 0
+
+        # M_total gradients with respect to x_center, y_center
+        x_grad = -2 * np.sum(mass_density * (x_coords - x_center))
+        y_grad = -2 * np.sum(mass_density * (y_coords - y_center))
+
+        penalty_score = visited_points[current_center]
+
+        # Dynamic learning rate: decreases inversely proportional to penalty score
+        learning_rate = 1 / (1 + 0.2*penalty_score)
+
+        # Negative sign ensures we step opposite of the gradient, i.e. gradient descent
+        x_step = int(np.floor(-learning_rate * x_grad))
+        y_step = int(np.floor(-learning_rate * y_grad))
+        
+        # Ensure the new position is between the first and last index
+        if 0 <= (x_center + x_step) <= (x_len - 1):
+            x_center = x_center + x_step
+        if 0 <= (y_center + x_step) <= (y_len - 1):
+            y_center = y_center + y_step
+
+        # Compute M_total_new
+        M_total_new = np.sum(mass_density * ((x_coords - x_center)**2 + (y_coords - y_center)**2))
+
+        M_total_list.append(M_total_new)
+        difference = M_total_new - M_total
+
+        # Compare the old M_total to the new M_total
+        if abs(difference) < tolerance:
+            break
+
+        # Reassign M_total and add iteration to counter
+        M_total = M_total_new
+        iteration += 1
+        
+    return M_total
