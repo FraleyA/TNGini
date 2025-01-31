@@ -21,7 +21,7 @@ def get_subhalo_position(subbox_dir, subhalo_id, snap_num):
 
     
 def mass_density_in_pixels(path, snap_num, p_type, center, subbox_num=None, view='xy', box_height=5, box_length=20, box_width=20, Nbins=80, change_viewing_angle=False, theta=None, phi=None, align=False):
-    """ Returns an effective image where pixel values represent stellar mass densities (unsorted, unprocessed).
+    """ Returns an image where pixel values represent stellar mass densities (unsorted, unprocessed).
         
         subbox_num: 0, 1 or 2, left as optional so that the script may work with unmodified Illustris package in full box snapshots.
         Nbins: Kept at a low number to reproduce images closer to the resolution of actual observations.
@@ -220,6 +220,31 @@ def gini_plot(mass_density, style='seaborn-v0_8-muted', color1=2, color2=0, save
         fig.savefig(save_name)
 
 
+def Gini(mass_density):
+    """ Gini coefficient describes the distribution of light throughout a galaxy. This function
+        calculates the G value of a merger, and is used to track G over the evolution of the merger.
+        Takes an NxN array of pixels (image of galaxy).
+    """
+    
+    # Only include galaxy pixels, sort the array
+    galaxy_pixels = mass_density > 0
+    ranked_mass_density = np.sort(mass_density[galaxy_pixels])
+    
+    # Increase pixel index by 1 for Gini because a 0th pixel does not make sense
+    pixels = np.arange(0, len(ranked_mass_density))
+    n = len(pixels)
+    a = 1 / (np.mean(ranked_mass_density) * n * (n - 1)) # Coefficient outside of the summation
+    
+    # Initialize Gini coefficient
+    summation = 0
+        
+    # Sum over each pixel to evaluate G
+    for i in pixels:
+        summation += (2 * (i + 1) - n - 1) * ranked_mass_density[i]
+    
+    return a * summation
+        
+
 def gini_over_time(path, subbox_dir, subhalo_id, snap_range, p_type, save_path, subbox_num=None, view='xy', 
                    box_height=5, box_length=20, box_width=20, Nbins=80, 
                    align=False, change_viewing_angle=False, theta=None, phi=None):
@@ -239,7 +264,7 @@ def gini_over_time(path, subbox_dir, subhalo_id, snap_range, p_type, save_path, 
         
         if change_viewing_angle:
             mass_density = mass_density_in_pixels(path, snapshot, p_type, subhalo_center, subbox_num=subbox_num, view='xy', 
-                                                  box_height=10, box_length=box_length, box_width=box_width, Nbins=Nbins, 
+                                                  box_height=box_height, box_length=box_length, box_width=box_width, Nbins=Nbins, 
                                                   change_viewing_angle=change_viewing_angle, theta=theta, phi=phi
                                                  )
             galaxy_pixels = mass_density > 0 # Only include pixels that contain stellar particles
@@ -248,7 +273,7 @@ def gini_over_time(path, subbox_dir, subhalo_id, snap_range, p_type, save_path, 
             
         else:
             mass_density = mass_density_in_pixels(path, snapshot, p_type, subhalo_center, subbox_num=subbox_num, view='xy', 
-                                                  box_height=10, box_length=box_length, box_width=box_width, Nbins=Nbins, 
+                                                  box_height=box_height, box_length=box_length, box_width=box_width, Nbins=Nbins, 
                                                  )
             galaxy_pixels = mass_density > 0 # Only include pixels that contain stellar particles
             mass_density = np.sort(mass_density[galaxy_pixels]) # Sort pixels for gini calculation
@@ -346,12 +371,17 @@ def gini_over_time(path, subbox_dir, subhalo_id, snap_range, p_type, save_path, 
     return lookback_time, gini_coefficients
 
 
-def M_total_minimum(mass_density, maximum_iterations=1000, tolerance=1e-6):
+def M_total_minimum(mass_density, maximum_iterations=1000, tolerance=1e-6, return_center=False):
     """ Takes the unprocessed merger snapshot, and uses gradient descent to pinpoint the minimum
         value of M_total.
         
+        IMPORTANT: This function assumes that the mass_density array is centered on the subhalo position.
+        Gradient descent might not land on the global minimum otherwise.
+        
         mass_density: NxN pixel image of a galaxy merger.
-        maximum_iterations: Iteration limit before the algori"""
+        maximum_iterations: Iteration limit before the algorithm stops.
+        return_center: returns (x_center, y_center) instead of the flux value at that location.
+    """
     
     # Camera dimensions, i.e. the pixel coordinates (x, y)
     x_len = len(mass_density[0])
@@ -418,4 +448,105 @@ def M_total_minimum(mass_density, maximum_iterations=1000, tolerance=1e-6):
         M_total = M_total_new
         iteration += 1
         
+        if return_center:
+            return (x_center, y_center)
+        
     return M_total
+
+
+def M20_calc(mass_density, maximum_iterations=1000, tolerance=1e-6):
+    """ The second-order moment of the brightest 20% of the mergering galaxies flux based on the 
+        subhalo position. Definition and procedure for calculating M20 comes from Lotz, et. al (2004).
+        
+        mass_density: NxN pixel image of a galaxy merger.
+        maximum_iterations: Iteration limit before the algorithm stops (M_total_minimum uses gradient descent). 
+    """
+
+    # Processed only including ranked galaxy pixels, now 1D-array; slicing reverses
+    # the array such that the pixels are ordered in descending order (sum over brightest when iterated over)
+    galaxy_pixels = mass_density > 0
+    ranked_mass_density = np.sort(mass_density[galaxy_pixels])[::-1]
+
+    # Store twenty percent of the total flux
+    twenty_percent = 0.2 * np.sum(ranked_mass_density)
+
+    # Iterate to find the pixels to include in 20% of galaxy flux
+    threshold = 0
+    pixels = np.array([])
+    for pixel_flux in ranked_mass_density:
+        threshold += pixel_flux
+        if threshold < twenty_percent:
+            pixels = np.append(pixels, pixel_flux)
+        elif threshold > twenty_percent:
+            break
+    
+    # Initialize M_i summation
+    M_i = 0
+    
+    # Get the (x_center, y_center) coordinates
+    x_center, y_center = M_total_minimum(mass_density, maximum_iterations=maximum_iterations, tolerance=tolerance, return_center=True)
+    
+    # Calculate M_i by summing over the brightest pixels
+    for pixel_flux in pixels:
+        x, y = np.where(mass_density == pixel_flux)
+        M_i += pixel_flux * ((x - x_center)**2 + (y - y_center)**2)
+    
+    # Unprocessed image that determines the galaxy center pixel, and the normalization factor M_tot
+    M_tot = M_total_minimum(mass_density, maximum_iterations=maximum_iterations, tolerance=tolerance)
+    
+    # This is what it was all for!
+    M_20 = np.log10(M_i / M_tot)
+    
+    return M_20[0]
+
+
+def G_vs_M20_plot(base_path, subbox_path, subhalo_id, snap_range, subbox_num=1, style='seaborn-v0_8-muted', figsize=(10, 6), dpi=300, cmap='inferno', save_path='/home/fraley.a/merger_morphology/plots/Gini_vs_M20/', save_name=None):
+    """ Plot Gini coefficient vs. M20 at the respective snapshot. """
+    
+    lookback_time_vals = np.array([])
+    G_vals = np.array([])
+    M20_vals = np.array([])
+
+    for snap in snap_range:
+
+        # Get the scale factor for conversion to lookback time
+        header = il.snapshot.loadHeader(base_path, snap, subbox_num)
+        scale_factor = header.get('Time')
+
+        # Set up the IllustrisTNG cosmological parameters to compute the lookback time
+        cosmology = FlatLambdaCDM(H0=67.74 * units.km / units.s / units.Mpc,
+                                  Om0=0.3089,
+                                  Ob0=0.0486
+                                 )
+
+        # Convert scale factor array into redshift values
+        redshift = (1 / scale_factor) - 1
+        lookback_time = cosmology.lookback_time(redshift).to(units.Gyr).round(3).value
+        lookback_time_vals = np.append(lookback_time_vals, lookback_time)
+
+        subhalo_center = get_subhalo_position(subbox_path, subhalo_id, snap)
+        
+        # Stellar mass density, p_type = 4
+        mass_density = mass_density_in_pixels(base_path, snap, '4', subhalo_center, subbox_num=subbox_num)
+
+        G = Gini(mass_density)
+        G_vals = np.append(G_vals, G)
+
+        M20 = M20_calc(mass_density)
+        M20_vals = np.append(M20_vals, M20)
+
+    plt.style.use(style)
+    colors = [c['color'] for c in plt.rcParams['axes.prop_cycle']]
+    fig, ax = plt.subplots(figsize=figsize, dpi=dpi)
+    ax.grid(True, zorder=0)
+
+    # M20 at the respective lookback time
+    im = ax.scatter(M20_vals, G_vals, c=lookback_time_vals, cmap=cmap, edgecolors='black', lw=0.5, s=25, zorder=2)
+    cbar = fig.colorbar(im)
+    cbar.set_label(r'Lookback Time [$Gyr$]', labelpad=25)
+    ax.set_xlabel(r'$M_{20}$')
+    ax.set_ylabel(r'$G_{\rho}$')
+    plt.show()
+    
+    if save_name != None:
+        fig.savefig(save_path + save_name)
