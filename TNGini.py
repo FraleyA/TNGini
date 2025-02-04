@@ -328,8 +328,7 @@ def gini_evolution(path, subbox_path, subhalo_id, snap_range, p_type, subbox_num
     
     # Visualize snapshots through time using ap.galaxy2Dplots()
     if change_viewing_angle:     
-        snap_list = [snap_range[0], snap_range[round(len(snap_range) / 4)], snap_range[round(len(snap_range) / 2)], snap_range[round(3 * len(snap_range) / 4)], snap_range[-1]]
-        
+        snap_list = [snap_range[0], snap_range[0]+min_mask, snap_range[0]+max_mask, snap_range[-1]]
         for i in snap_list:
             subhalo_center = get_subhalo_position(subbox_path, subhalo_id, i)
             
