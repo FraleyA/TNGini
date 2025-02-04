@@ -11,16 +11,16 @@ from arepo_python_tools.global_props import get_particle_data
 import arepo_python_tools as ap
 
 
-def get_subhalo_position(subbox_dir, subhalo_id, snap_num):
+def get_subhalo_position(subbox_path, subhalo_id, snap_num):
     """ Return subhalo position in snapshot. """
     
-    with h5py.File(subbox_dir, 'r') as hf:
+    with h5py.File(subbox_path, 'r') as hf:
         subhalo = np.where(hf['SubhaloIDs'][:] == subhalo_id)[0]
         subhalo_position = hf['SubhaloPos'][subhalo, snap_num, :]
         return subhalo_position[0]
 
     
-def mass_density_in_pixels(path, snap_num, p_type, center, subbox_num=None, view='xy', box_height=5, box_length=20, box_width=20, Nbins=80, change_viewing_angle=False, theta=None, phi=None, align=False):
+def mass_density_in_pixels(path, snap_num, p_type, center, subbox_num=None, view='xy', box_height=5, box_length=30, box_width=30, Nbins=80, change_viewing_angle=False, theta=None, phi=None, align=False):
     """ Returns an image where pixel values represent stellar mass densities (unsorted, unprocessed).
         
         subbox_num: 0, 1 or 2, left as optional so that the script may work with unmodified Illustris package in full box snapshots.
@@ -34,7 +34,7 @@ def mass_density_in_pixels(path, snap_num, p_type, center, subbox_num=None, view
     header = il.snapshot.loadHeader(path, snap_num, subbox_num)
     boxsize = header.get('BoxSize')
     
-    # Load fields needed for stellar density calculation.
+    # Load fields needed for stellar density calculation
     load_fields = ['Masses','Coordinates']
         
     particle_data = get_particle_data(path, snap_num, p_type, load_fields, subbox_num)
@@ -44,7 +44,7 @@ def mass_density_in_pixels(path, snap_num, p_type, center, subbox_num=None, view
             x_coord = np.array([])
             y_coord = np.array([])
             z_coord = np.array([])
-        elif change_viewing_angle == True: # My addition to Aneesh's code to choose random viewing angles.
+        elif change_viewing_angle: # My addition to Aneesh's code to choose random viewing angles
             if theta == None and phi == None:
                 particle_positions = particle_data['Coordinates'] - center
             
@@ -54,20 +54,20 @@ def mass_density_in_pixels(path, snap_num, p_type, center, subbox_num=None, view
                 # Now, we can safely get theta from arccos(theta)
                 theta = np.arccos(cos_theta)
     
-                # Rotation matrix about x-axis in terms of the polar angle, theta.
-                Rx = np.array([[1, 0, 0],
-                              [0, np.cos(theta), -np.sin(theta)],
-                              [0, np.sin(theta), np.cos(theta)]]
+                # Rotation matrix about y-axis in terms of the polar angle, theta
+                Ry = np.array([[np.cos(theta), 0, np.sin(theta)],
+                              [0, 1, 0],
+                              [-np.sin(theta), 0, np.cos(theta)]]
                              )
     
-                # Rotation matrix about the z-axis in terms of the azimuthal angle, phi.
+                # Rotation matrix about the z-axis in terms of the azimuthal angle, phi
                 Rz = np.array([[np.cos(phi), -np.sin(phi), 0],
                               [np.sin(phi), np.cos(phi), 0],
                               [0, 0, 1]]
                              )
         
-                # total rotation matrix
-                R = Rx @ Rz
+                # Total rotation matrix
+                R = Ry @ Rz
     
                 # Apply the rotation to the dataset
                 new_positions = np.einsum('ij,kj->ki', R, particle_positions)
@@ -78,22 +78,18 @@ def mass_density_in_pixels(path, snap_num, p_type, center, subbox_num=None, view
             else:
                 particle_positions = particle_data['Coordinates'] - center
                 
-                # Rotation matrix about x-axis in terms of the polar angle, theta.
-                Rx = np.array([[1, 0, 0],
-                              [0, np.cos(theta), -np.sin(theta)],
-                              [0, np.sin(theta), np.cos(theta)]]
+                Ry = np.array([[np.cos(theta), 0, np.sin(theta)],
+                              [0, 1, 0],
+                              [-np.sin(theta), 0, np.cos(theta)]]
                              )
     
-                # Rotation matrix about the z-axis in terms of the azimuthal angle, phi.
                 Rz = np.array([[np.cos(phi), -np.sin(phi), 0],
                               [np.sin(phi), np.cos(phi), 0],
                               [0, 0, 1]]
                              )
             
-                # total rotation matrix
-                R = Rx @ Rz
+                R = Ry @ Rz
     
-                # Apply the rotation to the dataset
                 new_positions = np.einsum('ij,kj->ki', R, particle_positions)
                 x_coord = new_positions[:, 0]
                 y_coord = new_positions[:, 1]
@@ -179,12 +175,11 @@ def gini_plot(mass_density, style='seaborn-v0_8-muted', color1=2, color2=0, save
         color1 and color2: Color based on the chosen matplotlib style parameter, and rcParams index.
     """
 
-    # Apply mask to mass_density.
+    # Apply mask to mass_density
     galaxy_pixels = mass_density > 0
     mass_density = np.sort(mass_density[galaxy_pixels])
-    mass_density.flatten()
 
-    # Percentage of faintest pixels.
+    # Percentage of faintest pixels
     pixels = np.arange(1, len(mass_density) + 1)
     percent_pixels = []
     for i in pixels:
@@ -192,14 +187,14 @@ def gini_plot(mass_density, style='seaborn-v0_8-muted', color1=2, color2=0, save
 
     percent_pixels = np.array(percent_pixels)
 
-    # Percentage of total flux.
+    # Percentage of total flux
     percent_mass_density = []
     for i in range(1, len(mass_density) + 1):
         percent_mass_density.append(np.sum(mass_density[0:i]) / np.sum(mass_density))
 
     percent_mass_density = np.array(percent_mass_density)
 
-    # Plot the processed mass_density data.
+    # Plot the processed mass_density data
     plt.style.use(style)
     colors = plt.rcParams['axes.prop_cycle'].by_key()['color']
     color1 = colors[color1]
@@ -221,7 +216,7 @@ def gini_plot(mass_density, style='seaborn-v0_8-muted', color1=2, color2=0, save
 
 
 def Gini(mass_density):
-    """ Gini coefficient describes the distribution of light throughout a galaxy. This function
+    """ Gini coefficient describes the distribution of light (mass) throughout a galaxy. This function
         calculates the G value of a merger, and is used to track G over the evolution of the merger.
         Takes an NxN array of pixels (image of galaxy).
     """
@@ -245,130 +240,115 @@ def Gini(mass_density):
     return a * summation
         
 
-def gini_over_time(path, subbox_dir, subhalo_id, snap_range, p_type, save_path, subbox_num=None, view='xy', 
-                   box_height=5, box_length=20, box_width=20, Nbins=80, 
-                   align=False, change_viewing_angle=False, theta=None, phi=None):
+def gini_evolution(path, subbox_path, subhalo_id, snap_range, p_type, subbox_num=None, 
+                   save_path=None, save_name=None, view='xy', box_height=5, box_length=30, box_width=30, 
+                   Nbins=80, vmin=-1.0, vmax=2.0, change_viewing_angle=False, theta=None, phi=None
+                  ):
     
     """ Returns an array of gini coefficients at each respective lookback time. """
     
-    # Initialize list of G values at a given scale factor/lookback time.
-    gini_coefficients = []
-    scale_factor = []
+    # Generate theta and phi for random viewing angle relative to default view
+    if change_viewing_angle:
+        if theta == None and phi == None:
+            cos_theta = np.random.uniform(-1, 1)
+            theta = np.arccos(cos_theta)
+            phi = np.random.uniform(0, 2*np.pi)
+    
+    # Initialize array of G vals and lookback time
+    gini_vals = np.array([])
+    lookback_time_vals = np.array([])
     
     for snapshot in snap_range:
-        header = il.snapshot.loadHeader(path, snapshot, 1)
-        time = header.get('Time')
-        scale_factor.append(time)
+        header = il.snapshot.loadHeader(path, snapshot, subbox_num)
+        scale_factor = header.get('Time')
         
-        subhalo_center = get_subhalo_position(subbox_dir, subhalo_id, snapshot)
+        # Set up the IllustrisTNG cosmological parameters to compute the lookback time
+        cosmology = FlatLambdaCDM(H0=67.74 * units.km / units.s / units.Mpc,
+                                  Om0=0.3089, Ob0=0.0486
+                                 )
+
+        # Convert scale factor array into redshift values to compute lookback time
+        redshift = (1 / scale_factor) - 1
+        lookback_time = cosmology.lookback_time(redshift).to(units.Gyr).round(3).value
+        
+        # Get subhalo position for centering the image
+        subhalo_center = get_subhalo_position(subbox_path, subhalo_id, snapshot)
         
         if change_viewing_angle:
-            mass_density = mass_density_in_pixels(path, snapshot, p_type, subhalo_center, subbox_num=subbox_num, view='xy', 
+            # Random viewing angle rotated from default view
+            mass_density = mass_density_in_pixels(path, snapshot, p_type, subhalo_center, subbox_num=subbox_num, view=view, 
                                                   box_height=box_height, box_length=box_length, box_width=box_width, Nbins=Nbins, 
                                                   change_viewing_angle=change_viewing_angle, theta=theta, phi=phi
                                                  )
-            galaxy_pixels = mass_density > 0 # Only include pixels that contain stellar particles
-            mass_density = np.sort(mass_density[galaxy_pixels]) # Sort pixels for gini calculation
-            mass_density.flatten()
-            
+                
+            # Only include pixels that contain stellar particles, sort in ascending order
+            galaxy_pixels = mass_density > 0
+            mass_density = np.sort(mass_density[galaxy_pixels])
+                
         else:
-            mass_density = mass_density_in_pixels(path, snapshot, p_type, subhalo_center, subbox_num=subbox_num, view='xy', 
+            # Default view
+            mass_density = mass_density_in_pixels(path, snapshot, p_type, subhalo_center, subbox_num=subbox_num, view=view, 
                                                   box_height=box_height, box_length=box_length, box_width=box_width, Nbins=Nbins, 
                                                  )
-            galaxy_pixels = mass_density > 0 # Only include pixels that contain stellar particles
-            mass_density = np.sort(mass_density[galaxy_pixels]) # Sort pixels for gini calculation
-            mass_density.flatten()
             
-        pixels = np.arange(1, len(mass_density) + 1)
-        n = len(pixels)
-        a = 1 / (np.mean(mass_density) * n * (n - 1)) # coefficient outside of the summation
-        result = 0 # initialize Gini
-        
-        # Sum over each pixel to evaluate G.
-        for i in range(0, len(pixels)):
-            result += (2 * (i + 1) - n - 1) * mass_density[i]
+            galaxy_pixels = mass_density > 0 
+            mass_density = np.sort(mass_density[galaxy_pixels])
+            
+        gini_vals = np.append(gini_vals, Gini(mass_density))
+        lookback_time_vals = np.append(lookback_time_vals, lookback_time)
     
-        gini_coefficients.append(a * result)
-    
-    scale_factor = np.array(scale_factor)
-    
-    # Set up the IllustrisTNG cosmological parameters to compute the lookback time.
-    cosmology = FlatLambdaCDM(H0=67.74 * units.km / units.s / units.Mpc,
-                              Om0=0.3089,
-                              Ob0=0.0486
-                             )
-
-    # Convert scale factor array into redshift values.
-    redshift = (1 / scale_factor) - 1
-    lookback_time = cosmology.lookback_time(redshift).to(units.Gyr).round(3).value
-    print(lookback_time)
-    
-    gini_coefficients = np.array(gini_coefficients)
-    print(gini_coefficients)
-    
+    # Plotting the data
     plt.style.use('seaborn-v0_8-muted')
     colors = [c['color'] for c in plt.rcParams['axes.prop_cycle']]
     fig, ax = plt.subplots(dpi=300)
     
     ax.grid(True, zorder=0)
+    ax.scatter(lookback_time_vals, gini_vals, c=colors[0], edgecolors='black', lw=0.5, s=25, zorder=2)
     
-    # All of the gini coefficients.
-    ax.scatter(lookback_time, gini_coefficients, c=colors[0], edgecolors='black', lw=0.5, s=25, zorder=2)
+    # Highlight the first and last G, minimum G, and maximum G
+    min_mask = np.where(gini_vals == np.min(gini_vals))[0][0]
+    max_mask = np.where(gini_vals == np.max(gini_vals))[0][0]
+    highlighted_times = np.array([lookback_time_vals[0], lookback_time_vals[min_mask], lookback_time_vals[max_mask], lookback_time_vals[-1]])
+    highlighted_gini_vals = np.array([gini_vals[0], gini_vals[min_mask], gini_vals[max_mask], gini_vals[-1]])
+    ax.scatter(highlighted_times, highlighted_gini_vals, c=colors[2], edgecolors='black', lw=0.5, s=30, zorder=3)
     
+    # Invert x-axis, so the beginning of the merger is at the origin
+    ax.set_xlabel(r'Lookback Time [$Gyr$]')
+    ax.invert_xaxis()
+    ax.set_ylabel(r'$G_{\rho}$')
+    
+    # Note rotations for the polar and azimuthal angles visually on the plot
     if change_viewing_angle:
-        #save_path = '/home/fraley.a/merger_tree_project/subbox1_mergers/MergerRotatedTest/'
-        
-        # Choose points throughout the merger to highlight for comparison at random viewing angles.
-        image_times = np.array([lookback_time[0], lookback_time[round(len(lookback_time) / 4)], lookback_time[round(len(lookback_time) / 2)], lookback_time[round(3 * len(lookback_time) / 4)], lookback_time[-1]])
-        image_gini_coefficients = np.array([gini_coefficients[0], gini_coefficients[round(len(gini_coefficients) / 4)], gini_coefficients[round(len(gini_coefficients) / 2)], gini_coefficients[round(3 * len(gini_coefficients) / 4)], gini_coefficients[-1]])
-        ax.scatter(image_times, image_gini_coefficients, c=colors[2], edgecolors='black', lw=0.5, s=30, zorder=3)
-        
-        # Note rotations for the polar and azimuthal angles visually on the plot.
         ax.text(0.85, 0.90, s=r'$\theta$ = ' + f'{round(theta * (180 / np.pi))}' + r'$^{\circ}$', transform=ax.transAxes)
         ax.text(0.85, 0.85, s=r'$\phi$ = ' + f'{round(phi * (180 / np.pi))}' + r'$^{\circ}$', transform=ax.transAxes)
     
-    else:
-        #save_path = '/home/fraley.a/merger_tree_project/subbox1_mergers/'
-        
-        # Highlight the first and last G, minimum G, and maximum G.
-        min_mask = np.where(gini_coefficients == np.min(gini_coefficients))[0][0]
-        max_mask = np.where(gini_coefficients == np.max(gini_coefficients))[0][0]
-        image_times = np.array([lookback_time[0], lookback_time[min_mask], lookback_time[max_mask], lookback_time[-1]])
-        image_gini_coefficients = np.array([gini_coefficients[0], gini_coefficients[min_mask], gini_coefficients[max_mask], gini_coefficients[-1]])
-        ax.scatter(image_times, image_gini_coefficients, c=colors[2], edgecolors='black', lw=0.5, s=30, zorder=3)
+    # Save the figure to the desired directory
+    if save_path != None and save_name != None:
+        fig.savefig(save_path + save_name)
     
-    ax.set_xlabel(r'Lookback Time [$Gyr$]')
-    ax.invert_xaxis() # Beginning of merger at the origin.
-    ax.set_ylabel(r'$G_{\rho}$')
-    
-    # Save the figure to the desired directory.
-    fig.savefig(save_path + '/gini_vs_time.png')
-    
-    # Make sure theta and phi are randomly generated outside of the function in this case.
-    if change_viewing_angle:
-        if theta == None and phi == None:
-            print('Error: Choose theta and phi.')
-            return
-        
+    # Visualize snapshots through time using ap.galaxy2Dplots()
+    if change_viewing_angle:     
         snap_list = [snap_range[0], snap_range[round(len(snap_range) / 4)], snap_range[round(len(snap_range) / 2)], snap_range[round(3 * len(snap_range) / 4)], snap_range[-1]]
         
         for i in snap_list:
-            subhalo_center = get_subhalo_position(subbox_dir, subhalo_id, i)
-            ap.galaxy2Dplots(path, i, '4', 'Density', subbox_num=1, view='xy', Nbins=80,
-                             box_height=10, box_length=100, box_width=100, centre=subhalo_center, change_viewing_angle=True, theta=theta, phi=phi, vmin=-1.0, vmax=2.0, save_name=save_path+f'/merger_rotated_snap_{i}.png'
+            subhalo_center = get_subhalo_position(subbox_path, subhalo_id, i)
+            
+            # Save snapshots corresponding to the highlighted G values (rotated relative to default view)
+            ap.galaxy2Dplots(path, i, p_type, 'Density', subbox_num=subbox_num, view=view, Nbins=Nbins, box_height=box_height, 
+                             box_length=box_length, box_width=box_width, centre=subhalo_center, change_viewing_angle=change_viewing_angle, 
+                             theta=theta, phi=phi, vmin=vmin, vmax=vmax, save_name=save_path+f'merger_rotated_snap_{i}.png'
                             )
-        
-        return lookback_time, gini_coefficients
-    
-    # Save snapshots corresponding to the highlighted G values.
-    snap_list = [snap_range[0], snap_range[0]+min_mask, snap_range[0]+max_mask, snap_range[-1]]
-    for i in snap_list:
-        ap.galaxy2Dplots(path, i, '4', 'Density', subbox_num=1, view='xy', Nbins=80,
-                         box_height=10, box_length=100, box_width=100, centre=get_subhalo_position(subbox_dir, subhalo_id, i),
-                         vmin=-1.0, vmax=2.0, save_name=save_path+f'/merger_snap_{i}.png'
-                        )
-        
-    return lookback_time, gini_coefficients
+            
+    else:
+        snap_list = [snap_range[0], snap_range[0]+min_mask, snap_range[0]+max_mask, snap_range[-1]]
+        for i in snap_list:
+            subhalo_center = get_subhalo_position(subbox_path, subhalo_id, i)
+            
+            # Save snapshots corresponding to the highlighted G values (default view)
+            ap.galaxy2Dplots(path, i, p_type, 'Density', subbox_num=subbox_num, view=view, Nbins=Nbins, box_height=box_height, 
+                             box_length=box_length, box_width=box_width, centre=subhalo_center, vmin=vmin, vmax=vmax, 
+                             save_name=save_path+f'/merger_snap_{i}.png'
+                            )
 
 
 def M_total_minimum(mass_density, maximum_iterations=1000, tolerance=1e-6, return_center=False):
