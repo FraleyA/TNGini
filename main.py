@@ -31,8 +31,8 @@ if __name__ == "__main__":
             print(f'Invalid boolean value for change_viewing_angle: {sys.argv[5]}')
             sys.exit()
             
-        save_path = sys.argv[6]
-        save_name = sys.argv[7]
+        save_path = str(sys.argv[6])
+        save_name = str(sys.argv[7])
         
         if len(sys.argv) > 8:
             print('Too many command line args ({sys.argv}).')
