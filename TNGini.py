@@ -241,8 +241,8 @@ def Gini(mass_density):
         
 
 def gini_evolution(path, subbox_path, subhalo_id, snap_range, p_type, subbox_num=None, 
-                   save_path=None, save_name=None, view='xy', box_height=5, box_length=30, box_width=30, 
-                   Nbins=80, vmin=-1.0, vmax=2.0, change_viewing_angle=False, theta=None, phi=None
+                   save_path=None, save_name=None, view='xy', Nbins=80, vmin=-1.0, vmax=2.0, 
+                   change_viewing_angle=False, theta=None, phi=None
                   ):
     
     """ Returns an array of gini coefficients at each respective lookback time. """
@@ -276,8 +276,7 @@ def gini_evolution(path, subbox_path, subhalo_id, snap_range, p_type, subbox_num
         
         if change_viewing_angle:
             # Random viewing angle rotated from default view
-            mass_density = mass_density_in_pixels(path, snapshot, p_type, subhalo_center, subbox_num=subbox_num, view=view, 
-                                                  box_height=box_height, box_length=box_length, box_width=box_width, Nbins=Nbins, 
+            mass_density = mass_density_in_pixels(path, snapshot, p_type, subhalo_center, subbox_num=subbox_num, view=view, Nbins=Nbins, 
                                                   change_viewing_angle=change_viewing_angle, theta=theta, phi=phi
                                                  )
                 
@@ -287,10 +286,8 @@ def gini_evolution(path, subbox_path, subhalo_id, snap_range, p_type, subbox_num
                 
         else:
             # Default view
-            mass_density = mass_density_in_pixels(path, snapshot, p_type, subhalo_center, subbox_num=subbox_num, view=view, 
-                                                  box_height=box_height, box_length=box_length, box_width=box_width, Nbins=Nbins, 
-                                                 )
-            
+            mass_density = mass_density_in_pixels(path, snapshot, p_type, subhalo_center, subbox_num=subbox_num, view=view, Nbins=Nbins)
+                                                 
             galaxy_pixels = mass_density > 0 
             mass_density = np.sort(mass_density[galaxy_pixels])
             
@@ -319,8 +316,8 @@ def gini_evolution(path, subbox_path, subhalo_id, snap_range, p_type, subbox_num
     
     # Note rotations for the polar and azimuthal angles visually on the plot
     if change_viewing_angle:
-        ax.text(0.85, 0.90, s=r'$\theta$ = ' + f'{round(theta * (180 / np.pi))}' + r'$^{\circ}$', transform=ax.transAxes)
-        ax.text(0.85, 0.85, s=r'$\phi$ = ' + f'{round(phi * (180 / np.pi))}' + r'$^{\circ}$', transform=ax.transAxes)
+        ax.text(0.85, 0.90, s=r'$\theta$ = ' + f'{np.round(theta * (180 / np.pi), 2)}' + r'$^{\circ}$', transform=ax.transAxes)
+        ax.text(0.85, 0.85, s=r'$\phi$ = ' + f'{np.round(phi * (180 / np.pi), 2)}' + r'$^{\circ}$', transform=ax.transAxes)
     
     # Save the figure to the desired directory
     if save_path != None and save_name != None:
@@ -479,17 +476,33 @@ def M20_calc(mass_density, maximum_iterations=1000, tolerance=1e-6):
     return M_20[0]
 
 
-def G_vs_M20_plot(base_path, subbox_path, subhalo_id, snap_range, subbox_num=1, style='seaborn-v0_8-muted', figsize=(10, 6), dpi=300, cmap='inferno', save_path='/home/fraley.a/merger_morphology/plots/Gini_vs_M20/', save_name=None):
-    """ Plot Gini coefficient vs. M20 at the respective snapshot. """
+def giniM20_plot(base_path, subbox_path, subhalo_id, snap_range, p_type, subbox_num=1, view='xy', Nbins=80,
+                 change_viewing_angle=False, theta=None, phi=None, style='seaborn-v0_8-muted', figsize=(10, 6), dpi=300, cmap='bone_r', 
+                 save_path='/home/fraley.a/merger_morphology/plots/Gini_vs_M20/', save_name=None
+                ):
+    """ Plot Gini coefficient vs. M20 at the respective snapshot.
+        
+        snap_range: np.arange(initial_snapshot, final_snapshot)
+        p_type: typically '4' here to track stellar particle density
+        subbox_num: 0, 1 or 2
+        change_viewing_angle: choose to view at randomized angles, theta (polar) and phi (azimuthal)
+    """
     
     lookback_time_vals = np.array([])
     G_vals = np.array([])
     M20_vals = np.array([])
-
-    for snap in snap_range:
+    
+    if change_viewing_angle:
+        if theta == None and phi == None:
+            # Generate random theta and phi for rotation relative to default view
+            cos_theta = np.random.uniform(-1, 1)
+            theta = np.arccos(cos_theta)
+            phi = np.random.uniform(0, 2*np.pi)
+    
+    for snapshot in snap_range:
 
         # Get the scale factor for conversion to lookback time
-        header = il.snapshot.loadHeader(base_path, snap, subbox_num)
+        header = il.snapshot.loadHeader(base_path, snapshot, subbox_num)
         scale_factor = header.get('Time')
 
         # Set up the IllustrisTNG cosmological parameters to compute the lookback time
@@ -503,17 +516,22 @@ def G_vs_M20_plot(base_path, subbox_path, subhalo_id, snap_range, subbox_num=1, 
         lookback_time = cosmology.lookback_time(redshift).to(units.Gyr).round(3).value
         lookback_time_vals = np.append(lookback_time_vals, lookback_time)
 
-        subhalo_center = get_subhalo_position(subbox_path, subhalo_id, snap)
+        subhalo_center = get_subhalo_position(subbox_path, subhalo_id, snapshot)
         
-        # Stellar mass density, p_type = 4
-        mass_density = mass_density_in_pixels(base_path, snap, '4', subhalo_center, subbox_num=subbox_num)
+        # Check if random rotation is desired
+        if change_viewing_angle:
+            mass_density = mass_density_in_pixels(base_path, snapshot, p_type, subhalo_center, subbox_num=subbox_num, 
+                                                  view=view, Nbins=Nbins, change_viewing_angle=change_viewing_angle, theta=theta, phi=phi
+                                                 )
+        else:
+            mass_density = mass_density_in_pixels(base_path, snapshot, p_type, subhalo_center, subbox_num=subbox_num, view=view, Nbins=Nbins)
 
         G = Gini(mass_density)
         G_vals = np.append(G_vals, G)
 
         M20 = M20_calc(mass_density)
         M20_vals = np.append(M20_vals, M20)
-
+        
     plt.style.use(style)
     colors = [c['color'] for c in plt.rcParams['axes.prop_cycle']]
     fig, ax = plt.subplots(figsize=figsize, dpi=dpi)
@@ -522,9 +540,15 @@ def G_vs_M20_plot(base_path, subbox_path, subhalo_id, snap_range, subbox_num=1, 
     # M20 at the respective lookback time
     im = ax.scatter(M20_vals, G_vals, c=lookback_time_vals, cmap=cmap, edgecolors='black', lw=0.5, s=25, zorder=2)
     cbar = fig.colorbar(im)
-    cbar.set_label(r'Lookback Time [$Gyr$]', labelpad=25)
+    cbar.set_label(r'Lookback Time [$Gyr$]', labelpad=20)
     ax.set_xlabel(r'$M_{20}$')
     ax.set_ylabel(r'$G_{\rho}$')
+    
+    # Label theta and phi on the plot for reference
+    if change_viewing_angle:
+        ax.text(0.85, 0.90, s=r'$\theta$ = ' + f'{np.round(theta * (180 / np.pi), 2)}' + r'$^{\circ}$', transform=ax.transAxes)
+        ax.text(0.85, 0.85, s=r'$\phi$ = ' + f'{np.round(phi * (180 / np.pi), 2)}' + r'$^{\circ}$', transform=ax.transAxes)
+    
     plt.show()
     
     if save_name != None:
