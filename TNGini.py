@@ -20,7 +20,7 @@ def get_subhalo_position(subbox_path, subhalo_id, snap_num):
         return subhalo_position[0]
 
     
-def mass_density_in_pixels(path, snap_num, p_type, center, subbox_num=None, view='xy', box_height=5, box_length=30, box_width=30, Nbins=80, change_viewing_angle=False, theta=None, phi=None, align=False):
+def mass_density_in_pixels(path, snap_num, p_type, center, subbox_num=None, view='xy', box_height=5, box_length=60, box_width=60, Nbins=100, change_viewing_angle=False, theta=None, phi=None, align=False):
     """ Returns an image where pixel values represent stellar mass densities (unsorted, unprocessed).
         
         subbox_num: 0, 1 or 2, left as optional so that the script may work with unmodified Illustris package in full box snapshots.
@@ -394,21 +394,21 @@ def M_total_minimum(mass_density, maximum_iterations=1000, tolerance=1e-6, retur
         # M_total gradients with respect to x_center, y_center
         x_grad = -2 * np.sum(mass_density * (x_coords - x_center))
         y_grad = -2 * np.sum(mass_density * (y_coords - y_center))
-
+        
         penalty_score = visited_points[current_center]
 
         # Dynamic learning rate: decreases inversely proportional to penalty score
         learning_rate = 1 / (1 + 0.2*penalty_score)
 
         # Negative sign ensures we step opposite of the gradient, i.e. gradient descent
-        x_step = int(np.floor(-learning_rate * x_grad))
-        y_step = int(np.floor(-learning_rate * y_grad))
+        x_step = np.round(-learning_rate * x_grad)
+        y_step = np.round(-learning_rate * y_grad)
         
         # Ensure the new position is between the first and last index
         if 0 <= (x_center + x_step) <= (x_len - 1):
-            x_center = x_center + x_step
+            x_center = int(x_center + x_step)
         if 0 <= (y_center + x_step) <= (y_len - 1):
-            y_center = y_center + y_step
+            y_center = int(y_center + y_step)
 
         # Compute M_total_new
         M_total_new = np.sum(mass_density * ((x_coords - x_center)**2 + (y_coords - y_center)**2))
@@ -424,8 +424,8 @@ def M_total_minimum(mass_density, maximum_iterations=1000, tolerance=1e-6, retur
         M_total = M_total_new
         iteration += 1
         
-        if return_center:
-            return (x_center, y_center)
+    if return_center:
+        return np.array([x_center, y_center], dtype=int)
         
     return M_total
 
@@ -476,7 +476,8 @@ def M20_calc(mass_density, maximum_iterations=1000, tolerance=1e-6):
     return M_20[0]
 
 
-def giniM20_plot(base_path, subbox_path, subhalo_id, snap_range, p_type, subbox_num=1, view='xy', Nbins=80,
+def giniM20_plot(base_path, subbox_path, subhalo_id, snap_range, p_type, subbox_num=1, view='xy',
+                 Nbins=100, visualize_merger=False, box_height=5, box_length=60, box_width=60,
                  change_viewing_angle=False, theta=None, phi=None, style='seaborn-v0_8-muted', figsize=(10, 6), dpi=300, cmap='bone_r', 
                  save_path='/home/fraley.a/merger_morphology/plots/Gini_vs_M20/', save_name=None
                 ):
@@ -500,7 +501,7 @@ def giniM20_plot(base_path, subbox_path, subhalo_id, snap_range, p_type, subbox_
             phi = np.random.uniform(0, 2*np.pi)
     
     for snapshot in snap_range:
-
+        
         # Get the scale factor for conversion to lookback time
         header = il.snapshot.loadHeader(base_path, snapshot, subbox_num)
         scale_factor = header.get('Time')
@@ -518,13 +519,23 @@ def giniM20_plot(base_path, subbox_path, subhalo_id, snap_range, p_type, subbox_
 
         subhalo_center = get_subhalo_position(subbox_path, subhalo_id, snapshot)
         
+        if visualize_merger:
+            ap.galaxy2Dplots(base_path, snapshot, p_type, 'Density', subbox_num=subbox_num, view=view,
+                             Nbins=Nbins, box_height=box_height, box_length=box_length, box_width=box_width,
+                             change_viewing_angle=change_viewing_angle, theta=theta, phi=phi, centre=subhalo_center, 
+                             save_name=save_path+f'SH{subhalo_id}_SN{snapshot}.png', vmin=-2.0, vmax=1.0, smooth=False
+                            )
+        
         # Check if random rotation is desired
         if change_viewing_angle:
-            mass_density = mass_density_in_pixels(base_path, snapshot, p_type, subhalo_center, subbox_num=subbox_num, 
-                                                  view=view, Nbins=Nbins, change_viewing_angle=change_viewing_angle, theta=theta, phi=phi
+            mass_density = mass_density_in_pixels(base_path, snapshot, p_type, subhalo_center, subbox_num=subbox_num, view=view,
+                                                  Nbins=Nbins, box_height=box_height, box_length=box_length, box_width=box_width,
+                                                  change_viewing_angle=change_viewing_angle, theta=theta, phi=phi
                                                  )
         else:
-            mass_density = mass_density_in_pixels(base_path, snapshot, p_type, subhalo_center, subbox_num=subbox_num, view=view, Nbins=Nbins)
+            mass_density = mass_density_in_pixels(base_path, snapshot, p_type, subhalo_center, subbox_num=subbox_num, view=view, 
+                                                  Nbins=Nbins, box_height=box_height, box_length=box_length, box_width=box_width
+                                                 )
 
         G = Gini(mass_density)
         G_vals = np.append(G_vals, G)
