@@ -547,9 +547,11 @@ def giniM20_plot(base_path, subbox_path, subhalo_id, snap_range, p_type, subbox_
     colors = [c['color'] for c in plt.rcParams['axes.prop_cycle']]
     fig, ax = plt.subplots(figsize=figsize, dpi=dpi)
     ax.grid(True, zorder=0)
+    ax.set_axisbelow(True)
 
     # M20 at the respective lookback time
     im = ax.scatter(M20_vals, G_vals, c=lookback_time_vals, cmap=cmap, edgecolors='black', lw=0.5, s=25, zorder=2)
+    line = ax.plot(M20_vals, G_vals, lw=0.75, c='black', zorder=1)
     cbar = fig.colorbar(im)
     cbar.set_label(r'Lookback Time [$Gyr$]', labelpad=20)
     ax.set_xlabel(r'$M_{20}$')
