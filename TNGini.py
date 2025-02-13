@@ -479,7 +479,7 @@ def M20_calc(mass_density, maximum_iterations=1000, tolerance=1e-6):
 def giniM20_plot(base_path, subbox_path, subhalo_id, snap_range, p_type, subbox_num=1, view='xy',
                  Nbins=100, visualize_merger=False, box_height=5, box_length=60, box_width=60,
                  change_viewing_angle=False, theta=None, phi=None, style='seaborn-v0_8-muted', figsize=(10, 6), dpi=300, cmap='bone_r', 
-                 save_path='/home/fraley.a/merger_morphology/plots/Gini_vs_M20/', save_name=None
+                 save_path='/home/fraley.a/merger_morphology/plots/Gini_vs_M20/', save_name=None, save_data=False
                 ):
     """ Plot Gini coefficient vs. M20 at the respective snapshot.
         
@@ -542,7 +542,15 @@ def giniM20_plot(base_path, subbox_path, subhalo_id, snap_range, p_type, subbox_
 
         M20 = M20_calc(mass_density)
         M20_vals = np.append(M20_vals, M20)
-        
+    
+    # Optionally save G_vals and M20_vals to a .txt file for plotting the median of different viewing angles
+    if save_data:
+        with open(save_path + 'output.txt', 'w') as txt_file:
+            # Write header so we know which is which
+            txt_file.write('M20, Gini' + '\n')
+            for M20, G in zip(M20_vals, G_vals):
+                txt_file.write(f'{M20}, {G}' + '\n')
+    
     plt.style.use(style)
     colors = [c['color'] for c in plt.rcParams['axes.prop_cycle']]
     fig, ax = plt.subplots(figsize=figsize, dpi=dpi)
