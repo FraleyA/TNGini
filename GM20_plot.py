@@ -40,5 +40,5 @@ if __name__ == "__main__":
     snap_range = np.arange(initial_snap, final_snap)
     p_type = '4'
     giniM20_plot(base_path, subbox_path, subhalo_id, snap_range, p_type, subbox_num=subbox_num, 
-                 change_viewing_angle=change_viewing_angle, visualize_merger=visualize_merger, save_path=save_path, save_name=save_name
+                 change_viewing_angle=change_viewing_angle, visualize_merger=visualize_merger, save_path=save_path, save_name=save_name, save_data=True
                 )
