@@ -439,7 +439,7 @@ def M20_calc(mass_density, maximum_iterations=1000, tolerance=1e-6):
     """
 
     # Processed only including ranked galaxy pixels, now 1D-array; slicing reverses
-    # the array such that the pixels are ordered in descending order (sum over brightest when iterated over)
+    # the array such that the pixels are ordered in descending order (sum over brightest pixels)
     galaxy_pixels = mass_density > 0
     ranked_mass_density = np.sort(mass_density[galaxy_pixels])[::-1]
 
